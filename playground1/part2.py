@@ -124,8 +124,8 @@ class Proxy:
     def run(self):
         """remove indentation
         """
-        while 1:
-            self.start_select()
+
+        self.start_select3()
 
     def start_select(self):
         time.sleep(delay)
@@ -163,6 +163,91 @@ class Proxy:
 
         for curr_sock in excepts:
             pass
+
+    def start_select2(self):
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setblocking(0)
+        server.bind(('localhost', 50000))
+        server.listen(5)
+
+        while self.ins:
+            readable, writable, exceptional = select.select(self.ins, self.outs, self.ins)
+            for s in readable:
+                if s is server:
+                    connection, client_address = s.accept()
+                    connection.setblocking(0)
+                    self.ins.append(connection)
+                    self.msg_queue[connection] = []
+                else:
+                    data = s.recv(1024)
+                    if data:
+                        self.msg_queue[s].append(data)
+                        if s not in self.outs:
+                            self.outs.append(s)
+                    else:
+                        if s in self.outs:
+                            self.outs.remove(s)
+                        self.ins.remove(s)
+                        s.close()
+                        del self.msg_queue[s]
+
+            for s in writable:
+                if self.msg_queue[s] == []:
+                    self.outs.remove(s)
+                else:
+                    next_msg = self.msg_queue[s].pop(0)
+                    s.send(next_msg)
+
+            for s in exceptional:
+                self.ins.remove(s)
+                if s in self.outs:
+                    self.outs.remove(s)
+                s.close()
+                del self.msg_queue[s]
+
+    def start_select3(self):
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setblocking(0)
+        server.bind(('localhost', 50000))
+        server.listen(5)
+        inputs = [server]
+        outputs = []
+        message_queues = {}
+
+        while inputs:
+            readable, writable, exceptional = select.select(inputs, outputs, inputs)
+            for s in readable:
+                if s is server:
+                    connection, client_address = s.accept()
+                    connection.setblocking(0)
+                    inputs.append(connection)
+                    message_queues[connection] = []
+                else:
+                    data = s.recv(1024)
+                    if data:
+                        message_queues[s].append(data)
+                        if s not in outputs:
+                            outputs.append(s)
+                    else:
+                        if s in outputs:
+                            outputs.remove(s)
+                        inputs.remove(s)
+                        s.close()
+                        del message_queues[s]
+
+            for s in writable:
+                if message_queues[s] == []:
+                    outputs.remove(s)
+                else:
+                    next_msg = message_queues[s].pop(0)
+                    s.send(next_msg)
+
+            for s in exceptional:
+                inputs.remove(s)
+                if s in outputs:
+                    outputs.remove(s)
+                s.close()
+                del message_queues[s]
 
 
     def start(self):
