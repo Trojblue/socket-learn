@@ -33,7 +33,8 @@ def to_byte(s:str):
 
 
 class Remote:
-    """用于得到remote data
+    """用class的目的是使用完以后不要被close掉, 否则会connection reset
+    用于得到remote的回应
     """
     def __init__(self):
         """把socket存成self的目的也是保持状态, 防止被close掉
@@ -126,42 +127,6 @@ class Proxy:
         """
         self.start_select2()
 
-    def start_select(self):
-        time.sleep(delay)
-        in_ready, out_ready, excepts = select.select(self.ins, self.outs, self.ins)
-
-        for curr_sock in in_ready:
-
-            if curr_sock is self.sock:    # accepting new client
-                clientSock, address = self.sock.accept()
-                print(f"Connection from {address}!")
-                clientSock.setblocking(False)
-                self.ins.append(clientSock)
-                self.msg_queue[clientSock] = []     # todo: not right
-                break
-
-            # curr_sock: some client
-            data = enumerate_recv(curr_sock)    # 接受数据
-            if data:
-                # on_recv
-                self.msg_queue[curr_sock].append(data)
-                if curr_sock not in self.outs:
-                    self.outs.append(curr_sock)
-
-            else:   # no data
-                self.msg_queue.pop(curr_sock, None)
-                self.ins.remove(curr_sock)
-                if curr_sock in self.outs:
-                    self.outs.remove(curr_sock)
-                curr_sock.close()
-
-
-        for curr_sock in out_ready:
-            msg = self.msg_queue[curr_sock].pop(0)
-            curr_sock.send(msg)
-
-        for curr_sock in excepts:
-            pass
 
     def start_select2(self):
         print("starting...")
@@ -208,7 +173,7 @@ class Proxy:
 
     def parse_s(self, s):
         """parsing incoming client's header
-        todo: 解析header, 请求资源, 然后给msg_queue添加一个返回的data对象
+        解析header, 请求资源, 然后给msg_queue添加一个返回的data对象
         """
         clientSocket = s
         clientHeader = Header(clientSocket)
@@ -244,49 +209,6 @@ class Proxy:
         self.ins.append(clientSocket)
         self.msg_queue[clientSocket] = []
 
-    def start_select3(self):
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setblocking(0)
-        server.bind(('localhost', 50000))
-        server.listen(5)
-        inputs = [server]
-        outputs = []
-        message_queues = {}
-
-        while inputs:
-            readable, writable, exceptional = select.select(inputs, outputs, inputs)
-            for s in readable:
-                if s is server:
-                    connection, client_address = s.accept_s()
-                    connection.setblocking(0)
-                    inputs.append(connection)
-                    message_queues[connection] = []
-                else:
-                    data = s.recv(1024)
-                    if data:
-                        message_queues[s].append(data)
-                        if s not in outputs:
-                            outputs.append(s)
-                    else:
-                        if s in outputs:
-                            outputs.remove(s)
-                        inputs.remove(s)
-                        s.close()
-                        del message_queues[s]
-
-            for s in writable:
-                if message_queues[s] == []:
-                    outputs.remove(s)
-                else:
-                    next_msg = message_queues[s].pop(0)
-                    s.send(next_msg)
-
-            for s in exceptional:
-                inputs.remove(s)
-                if s in outputs:
-                    outputs.remove(s)
-                s.close()
-                del message_queues[s]
 
 
     def start(self):
