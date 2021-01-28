@@ -50,7 +50,7 @@ class Header:
                     port = 443
             else:
                 for i in self.header_list:
-                    if i.startswith(b"Host:"):
+                    if (i.startswith(b"Host:") or i.startswith(b"host:")):
                         host = i.split(b" ")
                         if len(host) < 2:
                             continue
@@ -107,7 +107,7 @@ def communicate(sock1, sock2):
 def handle(client):
     """
     处理连接进来的客户端
-    :param client:
+    :param client: <socket>
     :return:
     """
     timeout = 60
@@ -118,8 +118,11 @@ def handle(client):
         return
     print(*header.get_host_info(), header.get_method())
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    host_info = header.get_host_info()
+
     try:
-        server.connect(header.get_host_info())
+        server.connect(host_info)
         server.settimeout(timeout)
         if header.is_ssl():
             data = b"HTTP/1.0 200 Connection Established\r\n\r\n"

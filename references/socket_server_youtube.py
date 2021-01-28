@@ -1,5 +1,7 @@
 import socket
 
+# https://www.youtube.com/watch?v=Lbfe3-v7yE0
+
 # 创建TCP Socket
 # AFINET: ipv4;  SOCKSTREAM: tcp
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

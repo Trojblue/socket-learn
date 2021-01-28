@@ -1,7 +1,7 @@
 import socket
 
 
-
+# https://www.youtube.com/watch?v=Lbfe3-v7yE0
 
 
 def simpleserver():

@@ -15,7 +15,7 @@ import sys
 # But when buffer get to high or delay go too down, you can broke things
 buffer_size = 4096
 delay = 0.0001
-forward_to = ('baidu.com', 80)
+forward_to = ('www.example.org', 80)
 
 
 
