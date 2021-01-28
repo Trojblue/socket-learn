@@ -135,4 +135,9 @@ class Proxy:
             clientSocket.send(data + b"\x00" * max(PACKET_SIZE - len(data), 0))
 
 
+if __name__ == '__main__':
+    server_config = ("localhost", 8888)
+    p = Proxy(server_config)
+    p.start()
+
 

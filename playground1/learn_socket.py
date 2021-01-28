@@ -3,7 +3,7 @@ import socket
 import threading
 import time
 
-from separate_functions import *
+from part1 import *
 
 
 class Header:
@@ -270,8 +270,6 @@ def accept_conn_oop():
     """变成OOP形式
     """
     server_config = ("localhost", 8888)
-    remote = ("www.example.org", 80)
-
     p = Proxy(server_config)
     p.start()
 
