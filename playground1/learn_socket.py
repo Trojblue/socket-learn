@@ -88,6 +88,7 @@ class Header:
     def __repr__(self):
         return str(self._header.decode("utf8"))
 
+
 class Server:
     def __init__(self, config):
         # Shutdown on Ctrl+C
@@ -115,6 +116,7 @@ class Server:
             d.setDaemon(True)
             d.start()
 
+
 def get_webpage():
     import socket
     request = b"GET / HTTP/1.1\nHost: stackoverflow.com\n\n"
@@ -125,6 +127,7 @@ def get_webpage():
     while (len(result) > 0):
         print(result)
         result = s.recv(10000)
+
 
 def socket_get():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -149,6 +152,7 @@ def socket_get():
                 break
 
             print(data.decode())
+
 
 def socket_transfer():
     """从一个remote GET到信息, 然后转发给另一个
@@ -199,7 +203,7 @@ def accept_connections():
         s_remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s_remote.connect(remote)
         s_remote.sendall(b"GET / HTTP/1.1\r\nHost: %s\r\n"
-                          b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                         b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                          b"Chrome/88.0.4324.104\r\n\r\n" % byte_remote)
 
         # enumerate response
@@ -219,11 +223,13 @@ def accept_connections():
 
 
 def accept_connections2():
-
     """在chrome访问<localhost:8888>,
     发送<remote>
-    """
 
+    同样功能, 更好的形式
+    下一步: rewrite headers
+    """
+    print("waiting connections...")
     server_config = ("localhost", 8888)
     remote = ("www.example.org", 80)
 
@@ -232,23 +238,28 @@ def accept_connections2():
     server.bind(server_config)
     server.listen(200)
 
-    remote_obj = Remote()
-
     while True:
         clientSocket, address = server.accept()  # <socket> object, int
         print(f"Connection from {address} has been established!")
 
         # 接收remote
-        data = remote_obj.get_remote_data(remote)
+        remote_obj = Remote()
+        data = remote_obj.get_data(remote)
         print(data.decode())
 
-        time.sleep(0.1)
         # 向client发送信息
         PACKET_SIZE = 4096
         clientSocket.send(data + b"\x00" * max(PACKET_SIZE - len(data), 0))
-        clientSocket.close()
+        # clientSocket.close()
 
+def accept_conn_oop():
+    """变成OOP形式
+    """
+    server_config = ("localhost", 8888)
+    remote = ("www.example.org", 80)
+
+    p = Proxy(server_config, remote)
+    p.start()
 
 if __name__ == '__main__':
-    accept_connections()
-
+    accept_conn_oop()
