@@ -63,24 +63,29 @@ class TheServer:
                 self.s = curr_sock
 
                 if self.s == self.server:
-                    self.on_accept()
+                    self.on_accept()    # 连接
                     break
 
-                self.data = self.s.recv(buffer_size)
+                self.data = self.s.recv(buffer_size)    # 接受数据
                 if len(self.data) == 0:
                     self.on_close()
                     break
                 else:
-                    self.on_recv()
+                    self.on_recv()      # 发回client
 
     def on_accept(self):
         fwd_host, fwd_port = forward_to[0], forward_to[1]
 
-        # 运行forward class, 并且返回一个已经
+        # connect到remote
         fwd_sock = forward_connection(fwd_host, fwd_port)
+        test_data_2 = (b"GET / HTTP/1.1\r\nHost: %s\r\n"
+                             b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                             b"Chrome/88.0.4324.104 Safari/537.36\r\n\r\n" % b'www.example.org')
+        fwd_sock.sendall(test_data_2)
 
-        # client: 连接到proxy的机器
+        # accept到client
         client_sock, client_addr = self.server.accept()
+        client_header = client_sock.recv(4096)
 
         if fwd_sock:
             print(client_addr, "has connected")
@@ -110,6 +115,10 @@ class TheServer:
         data = self.data
         # here we can parse and/or modify the data before send forward
         print(data)
+
+        # test_data_2 = (b"GET / HTTP/1.1\r\nHost: %s\r\n"
+        #                      b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        #                      b"Chrome/88.0.4324.104 Safari/537.36\r\n\r\n" % b'www.example.org')
         self.channel[self.s].send(data)
 
 

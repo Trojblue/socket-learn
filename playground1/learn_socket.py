@@ -119,15 +119,29 @@ class Server:
 
 def get_webpage():
     import socket
-    request = b"GET / HTTP/1.1\nHost: stackoverflow.com\n\n"
+
+    request = b"GET /~ylzhang/ HTTP/1.1\r\nHost: cs.toronto.edu\r\n" \
+                  b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) " \
+                  b"Chrome/88.0.4324.104 Safari/537.36\r\n\r\n"
+
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("www.cs.toronto.edu/~ylzhang/", 80))
+    s.connect(("www.cs.toronto.edu", 80))
     s.send(request)
     result = s.recv(10000)
     while (len(result) > 0):
         print(result)
         result = s.recv(10000)
 
+def get_webpage2():
+    import socket
+    request = b"GET ~bonner/courses/2020f/csc311/ HTTP/1.1\nHost: www.cs.toronto.edu\n\n"
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(("www.cs.toronto.edu", 80))
+    s.send(request)
+    result = s.recv(10000)
+    while (len(result) > 0):
+        print(result)
+        result = s.recv(10000)
 
 def socket_get():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -258,8 +272,8 @@ def accept_conn_oop():
     server_config = ("localhost", 8888)
     remote = ("www.example.org", 80)
 
-    p = Proxy(server_config, remote)
+    p = Proxy(server_config)
     p.start()
 
 if __name__ == '__main__':
-    accept_conn_oop()
+    get_webpage()
