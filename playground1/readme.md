@@ -9,3 +9,5 @@
 - part1: proxy
 - part2: proxy with select
 - part3: proxy with select, with caching
+- part4: part3, plus modifying requested page
+- part5: beautifying code
