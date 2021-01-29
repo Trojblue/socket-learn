@@ -145,7 +145,6 @@ class Remote:
         return: binary response from remote
         todo: 应该修改header, 而不是创建新的header
         todo: accept-encoding: identity 来避免gzip
-        todo: 检查是否被truncated
         """
         try:
             self.sock.connect((header.host, header.port))
@@ -154,7 +153,10 @@ class Remote:
             send_header = b"GET %s HTTP/1.1\r\nHost: %s\r\n" \
                           b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0;" \
                           b" Win64; x64) Chrome/88.0.4324.104\r\n\r\n" % (to_byte(header.rel), to_byte(header.host))
+
+            # change modded_header to send_header for better reliability
             self.sock.sendall(send_header)
+
             received = enumerate_recv(self.sock)
             return received
 
@@ -280,8 +282,6 @@ class Proxy:
                 return
 
             # modifying data
-            # todo: mod完以后被truncated
-            # todo: 修改content-length header
             data_mod = self.mod_s(data, ctime)
 
             print('writing...', data[:50])
