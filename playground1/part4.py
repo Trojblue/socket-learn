@@ -45,7 +45,7 @@ def to_byte(s: str):
     return bytearray(s, encoding='utf-8')
 
 
-def encode(url):
+def cache_encode(url):
     """url -> percent encoding
     """
     safe_str = ""
@@ -59,7 +59,7 @@ def encode(url):
     return safe_str
 
 
-def decode(url: str):
+def cache_decode(url: str):
     """percent encoding -> normal url
     """
     decoded = url
@@ -76,7 +76,7 @@ class Cache:
 
     def __init__(self, url):
         self.url = url
-        self.filename = encode(url)
+        self.filename = cache_encode(url)
         self.data = None
         self.ctime = None
 
@@ -103,11 +103,11 @@ class Cache:
     def cache_read(self):
         try:
             cache = open(self.filename, 'rb')
-            bytes = cache.read()
+            cache_bytes = cache.read()
             cache.close()
-            if bytes == b'':
+            if cache_bytes == b'':
                 return None
-            return bytes
+            return cache_bytes
         except Exception as e:
             print('read cache error', e)
             return
@@ -117,12 +117,13 @@ class Cache:
         url: string
         data: binary data
         """
-        f = open(encode(self.url), "wb")
+        f = open(cache_encode(self.url), "wb")
         f.write(data)
         f.close()
 
     def is_available(self):
         """if cache not found or is expired, self.data will be None
+        if not available, will create a new cache
         """
         return bool(self.data)
 
@@ -147,8 +148,8 @@ class Remote:
         try:
             self.sock.connect((header.host, header.port))
             send_header = b"GET %s HTTP/1.1\r\nHost: %s\r\n" \
-                          b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) " \
-                          b"Chrome/88.0.4324.104 Safari/537.36\r\n\r\n" % (to_byte(header.rel), to_byte(header.host))
+                          b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0;" \
+                          b" Win64; x64) Chrome/88.0.4324.104\r\n\r\n" % (to_byte(header.rel), to_byte(header.host))
             self.sock.sendall(send_header)
             return enumerate_recv(self.sock)
 
@@ -167,6 +168,8 @@ class Header:
     def __init__(self, sock):
         self.sock = sock
         self.header = enumerate_header(self.sock)
+        self.port, self.host, self.rel, self.url = None, None, None, None
+
         if self.is_empty():
             return
         self.header_list = self.header.split(b'\r\n')
@@ -210,7 +213,7 @@ class Proxy:
     def __init__(self, server_config):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.setblocking(0)
+        self.sock.setblocking(False)
         self.sock.bind(server_config)
         self.sock.listen(200)
 
@@ -221,11 +224,6 @@ class Proxy:
         self.msg_queue = {}
 
     def run(self):
-        """remove indentation
-        """
-        self.start_select2()
-
-    def start_select2(self):
         print("starting...")
         while self.ins:
             readable, writable, exceptional = select.select(self.ins, self.outs, self.ins)
@@ -236,7 +234,7 @@ class Proxy:
                     self.parse_fetch_s(s)  # is client, parse request
 
             for s in writable:  # client ready to receive; send back request
-                self.write_s(s)
+                self.mod_write_s(s)
 
             for s in exceptional:
                 print("exception happened")
@@ -252,36 +250,60 @@ class Proxy:
         s.close()
         del self.msg_queue[s]
 
-    def write_s(self, s):
+    def mod_write_s(self, s):
         """已经接收到remote, 发送回client
         """
         if s.fileno() == -1:  # closed sock
             print("write error: sock closed")
             return
 
-        if self.msg_queue[s] == []:
+        if not self.msg_queue[s]:
             self.outs.remove(s)
         else:
-            data = self.msg_queue[s].pop(0)
+            data, ctime = self.msg_queue[s].pop(0)
             if not data:
                 return
+
+            # modifying data
+            data = self.mod_s(data, ctime)
+
             print('writing...', data[:50])
-            PACKET_SIZE = 4096
-            s.send(data + b"\x00" * max(PACKET_SIZE - len(data), 0))
+            packet_size = 4096
+            s.send(data + b"\x00" * max(packet_size - len(data), 0))
+
+    def mod_s(self, data, ctime):
+        """modifying outgoing html page
+        ctime: timestamp for cache
+        """
+        body_index = data.find(b'<body>')
+
+        if (body_index == -1):
+            pass
+
+        time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ctime))
+        text = b"cache created at:\n %s" %(to_byte(time_str))
+        before_body = data[:body_index+9]
+        after_body = data[body_index+9:]
+        html_template = b"<p style=\"z-index:9999; position:fixed; top:20px; left:20px; width:200px; " \
+                        b"height:100px; background-color:yellow; padding:10px; font-weight:bold;\">%s</p>"%(text)
+
+        new_data = b"%s%s%s" % (before_body, html_template, after_body)
+
+        return new_data
 
     def parse_fetch_s(self, s):
         """parsing incoming client's header
         解析header, 请求资源, 然后给msg_queue添加一个返回的data对象
         """
-        clientSocket = s
-        clientHeader = Header(clientSocket)
+        client_socket = s
+        client_header = Header(client_socket)
 
-        if clientHeader.is_empty():
+        if client_header.is_empty():
             self.purge_s(s)
             return
 
         # Cache
-        url = clientHeader.url
+        url = client_header.url
         curr_cache = Cache(url)
 
         if curr_cache.is_available():
@@ -290,7 +312,7 @@ class Proxy:
         else:
             # 从client拿到目标地址, 然后用remote得到data
             remote_obj = Remote()
-            data = remote_obj.get_data(clientHeader)
+            data = remote_obj.get_data(client_header)
 
             if not data:
                 self.purge_s(s)
@@ -304,7 +326,7 @@ class Proxy:
             curr_cache.cache_write(data)
 
         # 准备发回数据
-        self.msg_queue[s].append(data)
+        self.msg_queue[s].append((data, curr_cache.ctime))
         if s not in self.outs:
             self.outs.append(s)
         return
@@ -312,33 +334,11 @@ class Proxy:
     def accept_s(self):
         """accepting new connections
         """
-        clientSocket, address = self.sock.accept()
+        client_socket, address = self.sock.accept()
         print(f"Connection from {address} has been established!")
-        self.sock.setblocking(0)
-        self.ins.append(clientSocket)
-        self.msg_queue[clientSocket] = []
-
-    def start(self):
-        print("waiting connections...")
-
-        server = self.server
-
-        while True:
-            clientSocket, address = server.accept()  # <socket> object, int
-            print(f"Connection from {address} has been established!")
-            clientHeader = Header(clientSocket)
-
-            # 从client拿到目标地址, 然后用remote得到data
-            remote_obj = Remote()
-            data = remote_obj.get_data(clientHeader)
-            try:
-                print(data.decode())
-            except UnicodeError as u:
-                print("unable to decode data", u)
-
-            # 向client发送信息
-            PACKET_SIZE = 4096
-            clientSocket.send(data + b"\x00" * max(PACKET_SIZE - len(data), 0))
+        self.sock.setblocking(False)
+        self.ins.append(client_socket)
+        self.msg_queue[client_socket] = []
 
 
 if __name__ == '__main__':

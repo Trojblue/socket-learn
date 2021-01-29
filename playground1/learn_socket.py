@@ -258,7 +258,7 @@ def accept_connections2():
         # 接收remote
         remote_obj = Remote()
         data = remote_obj.get_data(remote)
-        print(data.decode())
+        print(data.cache_decode())
 
         # 向client发送信息
         PACKET_SIZE = 4096
@@ -290,7 +290,7 @@ def try_cache():
 
     cache(site, data)
 
-    print(data.decode())
+    print(data.cache_decode())
 
 
 
