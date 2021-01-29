@@ -2,8 +2,7 @@ import signal
 import socket
 import threading
 import time
-
-from part1 import *
+from part3 import *
 
 
 class Header:
@@ -273,5 +272,38 @@ def accept_conn_oop():
     p = Proxy(server_config)
     p.start()
 
+
+
+
+def try_cache():
+
+    request = b"GET /~ylzhang/ HTTP/1.1\r\nHost: cs.toronto.edu\r\n" \
+                  b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) " \
+                  b"Chrome/88.0.4324.104 Safari/537.36\r\n\r\n"
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(("www.cs.toronto.edu", 80))
+    s.send(request)
+    data = enumerate_recv(s)
+
+    site = 'www.cs.toronto.edu/~ylzhang/'
+
+    cache(site, data)
+
+    print(data.decode())
+
+
+
+def try_read_cahce():
+    site = 'www.cs.toronto.edu/~ylzhang/'
+    cache = open(encode(site), 'rb')
+    bytes = cache.read()
+    cache.close()
+
+    print("C")
+
+
+
+
 if __name__ == '__main__':
-    accept_conn_oop()
+    try_read_cahce()

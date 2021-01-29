@@ -1,3 +1,5 @@
+from part3 import *
+
 class Forward:
     def __init__(self):
         pass
@@ -17,8 +19,16 @@ def find_replace():
 
 
 
+def try_tf():
+    data = 'asasdasd'
+
+    bool1 = bool(data)
+
+    bool2 = not(data)
+    print("D")
 
 if __name__ == '__main__':
-    num = Forward().start()
+    # num = Forward().start()
+    try_tf()
 
     print("D")
