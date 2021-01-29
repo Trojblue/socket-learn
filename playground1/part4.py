@@ -101,11 +101,11 @@ class Cache:
     def cache_read(self):
         try:
             cache = open(self.filename, 'rb')
-            bytes = cache.read()
+            cache_bytes = cache.read()
             cache.close()
-            if bytes == b'':
+            if cache_bytes == b'':
                 return None
-            return bytes
+            return cache_bytes
         except Exception as e:
             print('read cache error', e)
             return
@@ -145,8 +145,8 @@ class Remote:
         try:
             self.sock.connect((header.host, header.port))
             send_header = b"GET %s HTTP/1.1\r\nHost: %s\r\n" \
-                          b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) " \
-                          b"Chrome/88.0.4324.104 Safari/537.36\r\n\r\n" % (to_byte(header.rel), to_byte(header.host))
+                          b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0;" \
+                          b" Win64; x64) Chrome/88.0.4324.104\r\n\r\n" % (to_byte(header.rel), to_byte(header.host))
             self.sock.sendall(send_header)
             return enumerate_recv(self.sock)
 
@@ -165,6 +165,8 @@ class Header:
     def __init__(self, sock):
         self.sock = sock
         self.header = enumerate_header(self.sock)
+        self.port, self.host, self.rel, self.url = None, None, None, None
+
         if self.is_empty():
             return
         self.header_list = self.header.split(b'\r\n')
@@ -208,7 +210,7 @@ class Proxy:
     def __init__(self, server_config):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.setblocking(0)
+        self.sock.setblocking(False)
         self.sock.bind(server_config)
         self.sock.listen(200)
 
@@ -219,11 +221,6 @@ class Proxy:
         self.msg_queue = {}
 
     def run(self):
-        """remove indentation
-        """
-        self.start_select2()
-
-    def start_select2(self):
         print("starting...")
         while self.ins:
             readable, writable, exceptional = select.select(self.ins, self.outs, self.ins)
@@ -257,29 +254,29 @@ class Proxy:
             print("write error: sock closed")
             return
 
-        if self.msg_queue[s] == []:
+        if not self.msg_queue[s]:
             self.outs.remove(s)
         else:
             data = self.msg_queue[s].pop(0)
             if not data:
                 return
             print('writing...', data[:50])
-            PACKET_SIZE = 4096
-            s.send(data + b"\x00" * max(PACKET_SIZE - len(data), 0))
+            packet_size = 4096
+            s.send(data + b"\x00" * max(packet_size - len(data), 0))
 
     def parse_fetch_s(self, s):
         """parsing incoming client's header
         解析header, 请求资源, 然后给msg_queue添加一个返回的data对象
         """
-        clientSocket = s
-        clientHeader = Header(clientSocket)
+        client_socket = s
+        client_header = Header(client_socket)
 
-        if clientHeader.is_empty():
+        if client_header.is_empty():
             self.purge_s(s)
             return
 
         # Cache
-        url = clientHeader.url
+        url = client_header.url
         curr_cache = Cache(url)
 
         if curr_cache.is_available():
@@ -288,7 +285,7 @@ class Proxy:
         else:
             # 从client拿到目标地址, 然后用remote得到data
             remote_obj = Remote()
-            data = remote_obj.get_data(clientHeader)
+            data = remote_obj.get_data(client_header)
 
             if not data:
                 self.purge_s(s)
@@ -310,33 +307,11 @@ class Proxy:
     def accept_s(self):
         """accepting new connections
         """
-        clientSocket, address = self.sock.accept()
+        client_socket, address = self.sock.accept()
         print(f"Connection from {address} has been established!")
-        self.sock.setblocking(0)
-        self.ins.append(clientSocket)
-        self.msg_queue[clientSocket] = []
-
-    def start(self):
-        print("waiting connections...")
-
-        server = self.server
-
-        while True:
-            clientSocket, address = server.accept()  # <socket> object, int
-            print(f"Connection from {address} has been established!")
-            clientHeader = Header(clientSocket)
-
-            # 从client拿到目标地址, 然后用remote得到data
-            remote_obj = Remote()
-            data = remote_obj.get_data(clientHeader)
-            try:
-                print(data.decode())
-            except UnicodeError as u:
-                print("unable to decode data", u)
-
-            # 向client发送信息
-            PACKET_SIZE = 4096
-            clientSocket.send(data + b"\x00" * max(PACKET_SIZE - len(data), 0))
+        self.sock.setblocking(False)
+        self.ins.append(client_socket)
+        self.msg_queue[client_socket] = []
 
 
 if __name__ == '__main__':
