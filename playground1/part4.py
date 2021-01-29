@@ -144,21 +144,36 @@ class Remote:
         header: <Header> object
         return: binary response from remote
         todo: 应该修改header, 而不是创建新的header
+        todo: accept-encoding: identity 来避免gzip
+        todo: 检查是否被truncated
         """
         try:
             self.sock.connect((header.host, header.port))
+
+            modded_header = self.mod_header(header)
             send_header = b"GET %s HTTP/1.1\r\nHost: %s\r\n" \
                           b"Accept: text/html\r\nConnection: close\r\nuser-agent: Mozilla/5.0 (Windows NT 10.0;" \
                           b" Win64; x64) Chrome/88.0.4324.104\r\n\r\n" % (to_byte(header.rel), to_byte(header.host))
             self.sock.sendall(send_header)
-            return enumerate_recv(self.sock)
+            received = enumerate_recv(self.sock)
+            return received
 
         except Exception as e:
             print(e)
             return None
 
-    def close(self):
-        self.sock.close()
+    def mod_header(self, header):
+        modified_header = b"GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\nAccept-Encoding: identity\r\n" \
+                          % (to_byte(header.rel), to_byte(header.host))
+
+        skip_list = ("GET", "host:", "Host:", "Connection:", "connection:", "Accept-Encoding:", "accept-encoding:")
+
+        for head in header.header_list:
+            if any(words in head.decode('utf-8') for words in skip_list):
+                continue
+            modified_header = b"%s%s\r\n" % (modified_header, head)
+
+        return modified_header
 
 
 class Header:
@@ -265,11 +280,13 @@ class Proxy:
                 return
 
             # modifying data
-            data = self.mod_s(data, ctime)
+            # todo: mod完以后被truncated
+            # todo: 修改content-length header
+            data_mod = self.mod_s(data, ctime)
 
             print('writing...', data[:50])
             packet_size = 4096
-            s.send(data + b"\x00" * max(packet_size - len(data), 0))
+            s.send(data_mod + b"\x00" * max(packet_size - len(data_mod), 0))
 
     def mod_s(self, data, ctime):
         """modifying outgoing html page
@@ -277,18 +294,44 @@ class Proxy:
         """
         body_index = data.find(b'<body>')
 
-        if (body_index == -1):
+        if body_index == -1:
             pass
 
         time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ctime))
-        text = b"cache created at:\n %s" %(to_byte(time_str))
-        before_body = data[:body_index+9]
-        after_body = data[body_index+9:]
+        text = b"cache created at:\n %s" % (to_byte(time_str))
+        before_body = data[:body_index + 7]
+        after_body = data[body_index + 7:]
         html_template = b"<p style=\"z-index:9999; position:fixed; top:20px; left:20px; width:200px; " \
-                        b"height:100px; background-color:yellow; padding:10px; font-weight:bold;\">%s</p>"%(text)
+                        b"height:100px; background-color:yellow; padding:10px; font-weight:bold;\">%s</p>" % text
 
         new_data = b"%s%s%s" % (before_body, html_template, after_body)
+        template_len = len(html_template)
+        new_data = self.mod_file_size(new_data, template_len)
 
+        return new_data
+
+    def mod_file_size(self, data, added_size):
+        """modify request size += <added_size>
+        data: binary data
+        added_size: int
+        """
+        upper_index = data.find(b"Content-Length:")
+        lower_index = data.find(b"content-length:")
+
+        if upper_index == -1 and lower_index == -1:
+            # manually add a content-length
+            return
+
+        # finding content-length in header, and modify it
+
+        start = upper_index if lower_index == -1 else upper_index
+        break_index = data[start:].find(b"\r\n")  # first \r\n after <content-length:>
+        end = break_index + start
+
+        new_size = int(data[start:end].decode("utf-8").split(':')[1]) + added_size
+        new_content_binary = b"Content-Length: %s" % (to_byte(str(new_size)))
+
+        new_data = b"%s%s%s" % (data[:start], new_content_binary, data[end:])
         return new_data
 
     def parse_fetch_s(self, s):
